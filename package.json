@@ -21,4 +21,6 @@
     "morgan": "^1.10.0",
     "stripe": "^16.6.0"
   }
+  "scripts": { "start": "node src/index.js" }
+
 }
