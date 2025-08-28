@@ -18,6 +18,8 @@ import {
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`🚀 API running on http://localhost:${PORT}`));
+
 
 const allowed = (process.env.CORS_ORIGINS || '').split(',').filter(Boolean);
 app.use(cors({
