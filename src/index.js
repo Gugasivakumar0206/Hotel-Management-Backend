@@ -1,4 +1,4 @@
-// src/index.js
+// server/src/index.js
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -19,34 +19,43 @@ import {
 
 const app = express();
 
-// CORS
+// Render/Netlify will inject PORT; default for local dev:
+const PORT = process.env.PORT || 8080;
+
+// If you serve behind a proxy (Render), trust it so cookies & IP work correctly
+app.set('trust proxy', 1);
+
+// --- CORS ---
 const allowed = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
+
 app.use(
   cors({
-    origin:[
-    "http://localhost:5173", 
-    "https://hotelmanagement-1.netlify.app" 
-  ],
+    origin: (origin, cb) => {
+      // allow same-origin / server-to-server / curl (no origin)
+      if (!origin) return cb(null, true);
+      if (allowed.length === 0 || allowed.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS: ${origin} not allowed`), false);
+    },
     credentials: true,
   })
 );
 
-// security & parsers
+// --- Security & common middlewares ---
 app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(cookieParser());
 
-// simple root + health
+// --- Simple root & health checks ---
 app.get('/', (_req, res) =>
-  res.send('Hotel API is running. Try /api/health or /api/hotels')
+  res.type('text').send('Hotel API is running. Try /api/health or /api/hotels')
 );
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// routes
+// --- Routes ---
 app.use('/api/auth', authRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/room-types', roomTypeRoutes);
@@ -56,22 +65,28 @@ app.use('/api/offers', offerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 
-// ---- start server ONCE, after DB is ready ----
-const start = async () => {
-  const PORT = process.env.PORT || 8080; // Render provides PORT
-  try {
-    await connectDB(
-      process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/mern_hotel_booking'
-    );
-    console.log('✅ MongoDB connected');
-    app.listen(PORT, () => {
-      console.log(`🚀 API running on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error('❌ Failed to start server', err);
-    process.exit(1);
-  }
-};
-start();
+// --- 404 fallback for unknown API routes ---
+app.use('/api', (_req, res) => res.status(404).json({ message: 'Not Found' }));
 
-export default app;
+// --- Global error handler (so errors don’t crash the process) ---
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ message: 'Server error' });
+});
+
+// --- Boot ---
+connectDB(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/mern_hotel_booking')
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 API running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('DB connection failed:', err);
+    process.exit(1);
+  });
+
+// Optional: catch unhandled promise rejections
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
