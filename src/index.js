@@ -26,8 +26,10 @@ const allowed = (process.env.CORS_ORIGINS || '')
   .filter(Boolean);
 app.use(
   cors({
-    origin: (origin, cb) =>
-      cb(null, !origin || allowed.length === 0 || allowed.includes(origin)),
+    origin:[
+    "http://localhost:5173", 
+    "https://hotelmanagement-1.netlify.app" 
+  ],
     credentials: true,
   })
 );
